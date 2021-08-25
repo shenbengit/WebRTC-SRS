@@ -2,8 +2,7 @@ package com.shencoder.webrtc_srs
 
 import android.content.Context
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.widget.Button
 import androidx.lifecycle.lifecycleScope
 import com.elvishew.xlog.XLog
 import com.shencoder.mvvmkit.base.view.BaseSupportActivity
@@ -22,7 +21,7 @@ import org.webrtc.MediaConstraints
 
 class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>() {
     private val retrofitClient by inject<RetrofitClient>()
-
+    val socketIoClient = SocketIoClient()
     override fun getLayoutId(): Int {
         return R.layout.activity_main
     }
@@ -36,17 +35,27 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     }
 
     override fun initView() {
-        println("retrofitClient:${retrofitClient.apiService}")
+        findViewById<Button>(R.id.btnAdd).setOnClickListener {
+            socketIoClient.joinRoom()
+            initPullRtc()
+        }
     }
 
     override fun initData(savedInstanceState: Bundle?) {
-        initPullRtc()
-        Handler(Looper.getMainLooper()).postDelayed({
-            initPushRTC()
-        }, 5 * 1000L)
+        socketIoClient.setCallback {
+            println("pushRTC:${it}")
+            if (it.isNullOrBlank()) {
+                return@setCallback
+            }
+            runOnUiThread { initPushRTC(url = it) }
+        }
+        socketIoClient.connect()
+//        Handler(Looper.getMainLooper()).postDelayed({
+//            initPushRTC()
+//        }, 5 * 1000L)
     }
 
-    private fun initPushRTC() {
+    private fun initPushRTC(url: String) {
         val eglBaseContext = EglBase.create().eglBaseContext;
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions
@@ -100,10 +109,10 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                             //"http://192.168.2.150:1985/rtc/v1/publish/"
                             val srsBean = SrsRequestBean(
                                 it.description,
-                                "webrtc://192.168.2.88/live/android/camera1"
+                                url
                             )
                             val toJson = MoshiUtil.toJson(srsBean)
-                            println("json:${toJson}")
+                            println("push-json:${toJson}")
                             //请求srs
                             lifecycleScope.launch {
                                 val result = try {
@@ -111,13 +120,13 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         retrofitClient.apiService.requestRemoteSrs(srsBean)
                                     }
                                 } catch (e: Exception) {
-                                    println("网络请求出错：${e.printStackTrace()}")
+                                    println("push网络请求出错：${e.printStackTrace()}")
                                     null
                                 }
 
                                 result?.let { bean ->
                                     if (bean.code == 0) {
-                                        XLog.i("网络成功，code：${bean.code}")
+                                        XLog.i("psuh网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
                                             reorderSdp(bean.sdp)
@@ -128,7 +137,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                             remoteSdp
                                         )
                                     } else {
-                                        XLog.w("网络请求失败，code：${bean.code}")
+                                        XLog.w("push网络请求失败，code：${bean.code}")
                                     }
                                 }
                             }
@@ -236,13 +245,15 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                             offerSdp = it.description
                             connection.setLocalDescription(SdpAdapter("setLocalDescription"), it)
                             //"http://192.168.2.150:1985/rtc/v1/publish/"
+
+                            val webrtcUrl = "webrtc://192.168.2.88/live/android/camera2"
                             val srsBean = SrsRequestBean(
                                 it.description,
-                                "webrtc://192.168.2.88/live/android/camera2"
+                                webrtcUrl
                             )
 
                             val toJson = MoshiUtil.toJson(srsBean)
-                            println("json:${toJson}")
+                            println("pull-json:${toJson}")
                             //请求srs
                             lifecycleScope.launch {
                                 val result = try {
@@ -250,13 +261,13 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         retrofitClient.apiService.pullToSrs(srsBean)
                                     }
                                 } catch (e: Exception) {
-                                    println("网络请求出错：${e.printStackTrace()}")
+                                    println("pull网络请求出错：${e.printStackTrace()}")
                                     null
                                 }
 
                                 result?.let { bean ->
                                     if (bean.code == 0) {
-                                        XLog.i("网络成功，code：${bean.code}")
+                                        XLog.i("pull网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
                                             reorderSdp(bean.sdp)
@@ -265,8 +276,9 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                             SdpAdapter("setRemoteDescription"),
                                             remoteSdp
                                         )
+                                        socketIoClient.pullWebRTC(webrtcUrl)
                                     } else {
-                                        XLog.w("网络请求失败，code：${bean.code}")
+                                        XLog.w("pull网络请求失败，code：${bean.code}")
                                     }
                                 }
                             }
@@ -318,5 +330,10 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
             }
         }
         return null
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        socketIoClient.close()
     }
 }
