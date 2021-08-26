@@ -5,8 +5,6 @@ import io.socket.client.Socket
 import io.socket.engineio.client.EngineIOException
 import okhttp3.OkHttpClient
 import org.json.JSONArray
-import java.security.KeyManagementException
-import java.security.NoSuchAlgorithmException
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import javax.net.ssl.*
@@ -22,7 +20,7 @@ class SocketIoClient {
     private lateinit var socket: Socket
 
     private var callback: (String) -> Unit = {}
-
+    private var roomId = ""
     fun setCallback(callback: (String?) -> Unit) {
         this.callback = callback
     }
@@ -44,10 +42,10 @@ class SocketIoClient {
 
         val sslContext = SSLContext.getInstance("SSL")
         sslContext.init(null, arrayOf<TrustManager>(xtm), SecureRandom())
-        val DO_NOT_VERIFY: HostnameVerifier = HostnameVerifier { hostname, session -> true }
+        val hostnameVerifier = HostnameVerifier { hostname, session -> true }
         val okHttpClient = OkHttpClient.Builder()
             .sslSocketFactory(sslContext.socketFactory)
-            .hostnameVerifier(DO_NOT_VERIFY)
+            .hostnameVerifier(hostnameVerifier)
             .build()
         IO.setDefaultOkHttpWebSocketFactory(okHttpClient)
         IO.setDefaultOkHttpCallFactory(okHttpClient)
@@ -78,26 +76,24 @@ class SocketIoClient {
             callback(it[0] as String)
             println("SocketIoClient-->push_webrtc--->${it[0]}")
         }.on("in_room_other_client") {
-            val array=it[0] as JSONArray
+            val array = it[0] as JSONArray
             val string = array.getString(0)
-            callback( string)
+            callback(string)
             println("SocketIoClient-->in_room_other_client--->${it[0].javaClass.simpleName}")
-        }.on("test_list"){
-            val it1 = it
-            val jsonArray = it[0] as JSONArray
-            val get1 = jsonArray.getString(0)
-            val get2 = jsonArray.getString(1)
-            println("test_list")
         }
         socket.connect()
     }
 
+    fun setRoomId(roomId: String) {
+        this.roomId = roomId
+    }
+
     fun joinRoom() {
-        socket.emit("join_room", "0101")
+        socket.emit("join_room", roomId)
     }
 
     fun pullWebRTC(url: String) {
-        socket.emit("pull_webrtc", "0101", url)
+        socket.emit("pull_webrtc", roomId, url)
     }
 
     fun close() {

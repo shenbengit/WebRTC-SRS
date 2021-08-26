@@ -3,11 +3,14 @@ package com.shencoder.webrtc_srs
 import android.content.Context
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import androidx.lifecycle.lifecycleScope
 import com.elvishew.xlog.XLog
 import com.shencoder.mvvmkit.base.view.BaseSupportActivity
 import com.shencoder.mvvmkit.base.viewmodel.DefaultViewModel
 import com.shencoder.mvvmkit.util.MoshiUtil
+import com.shencoder.mvvmkit.util.toastWarning
+import com.shencoder.webrtc_srs.constant.Constant
 import com.shencoder.webrtc_srs.databinding.ActivityMainBinding
 import com.shencoder.webrtc_srs.http.RetrofitClient
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +25,18 @@ import org.webrtc.MediaConstraints
 class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>() {
     private val retrofitClient by inject<RetrofitClient>()
     val socketIoClient = SocketIoClient()
+    private val eglBaseContext = EglBase.create().eglBaseContext
+    private lateinit var peerConnectionFactory: PeerConnectionFactory
+
+    /**
+     * 推流地址
+     */
+    private val pullWebrtcUrl =
+        "webrtc://${Constant.SRS_SERVER_HTTPS}/live/android/camera"
+
+    private var pullConnection: PeerConnection? = null
+    private var pushConnection: PeerConnection? = null
+
     override fun getLayoutId(): Int {
         return R.layout.activity_main
     }
@@ -35,13 +50,40 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     }
 
     override fun initView() {
+        val etRoomId = findViewById<EditText>(R.id.etRoomId)
         findViewById<Button>(R.id.btnAdd).setOnClickListener {
-            socketIoClient.joinRoom()
+            val roomId = etRoomId.text.toString().trim()
+            if (roomId.isBlank()) {
+                toastWarning("请输入房间号")
+                return@setOnClickListener
+            }
+            socketIoClient.run {
+                setRoomId(roomId)
+                joinRoom()
+            }
             initPullRtc()
         }
     }
 
     override fun initData(savedInstanceState: Bundle?) {
+        PeerConnectionFactory.initialize(
+            PeerConnectionFactory.InitializationOptions
+                .builder(applicationContext).createInitializationOptions()
+        )
+        val options = PeerConnectionFactory.Options()
+        val encoderFactory =
+            H264VideoEncoderFactory(H264HardwareVideoEncoderFactory(eglBaseContext, true, true))
+        val decoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
+
+        peerConnectionFactory = PeerConnectionFactory.builder()
+            .setOptions(options)
+            .setVideoEncoderFactory(encoderFactory)
+            .setVideoDecoderFactory(decoderFactory)
+            .createPeerConnectionFactory()
+
+        mBinding.surfaceViewLocal.init(eglBaseContext, null)
+        mBinding.surfaceViewRemote.init(eglBaseContext, null)
+
         socketIoClient.setCallback {
             println("pushRTC:${it}")
             if (it.isNullOrBlank()) {
@@ -56,26 +98,9 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     }
 
     private fun initPushRTC(url: String) {
-        val eglBaseContext = EglBase.create().eglBaseContext;
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions
-                .builder(applicationContext).createInitializationOptions()
-        )
-        val options = PeerConnectionFactory.Options()
-        val encoderFactory =
-            H264VideoEncoderFactory(H264HardwareVideoEncoderFactory(eglBaseContext, true, true))
-        val decoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
-        val peerConnectionFactory = PeerConnectionFactory.builder()
-            .setOptions(options)
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
-            .createPeerConnectionFactory()
-
-        mBinding.surfaceViewRemote.init(eglBaseContext, null)
         val rtcConfig = PeerConnection.RTCConfiguration(emptyList())
         // 这里不能用PLAN_B 会报错
         rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-
         val peerConnection = peerConnectionFactory.createPeerConnection(
             rtcConfig,
             object : PeerConnectionObserver() {
@@ -104,7 +129,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                     super.onCreateSuccess(description)
                     description?.let {
                         if (it.type == SessionDescription.Type.OFFER) {
-                            offerSdp = it.description
+                            val offerSdp = it.description
                             connection.setLocalDescription(SdpAdapter("setLocalDescription"), it)
                             //"http://192.168.2.150:1985/rtc/v1/publish/"
                             val srsBean = SrsRequestBean(
@@ -129,8 +154,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         XLog.i("psuh网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
-                                            reorderSdp(bean.sdp)
-
+                                            reorderSdp(offerSdp, bean.sdp)
                                         )
                                         connection.setRemoteDescription(
                                             SdpAdapter("setRemoteDescription"),
@@ -146,10 +170,11 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                 }
             }, MediaConstraints())
         }
+
+        pushConnection = peerConnection
     }
 
-    private var offerSdp: String = ""
-    private fun reorderSdp(sdp: String?): String {
+    private fun reorderSdp(offerSdp: String, sdp: String?): String {
         if (sdp.isNullOrBlank()) {
             return ""
         }
@@ -170,28 +195,9 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
 
 
     private fun initPullRtc() {
-        val eglBaseContext = EglBase.create().eglBaseContext;
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions
-                .builder(applicationContext).createInitializationOptions()
-        )
-        mBinding.surfaceViewLocal.init(eglBaseContext, null)
-
-        val options = PeerConnectionFactory.Options()
-        val encoderFactory =
-            H264VideoEncoderFactory(H264HardwareVideoEncoderFactory(eglBaseContext, true, true))
-        val decoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
-        val peerConnectionFactory = PeerConnectionFactory.builder()
-            .setOptions(options)
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
-            .createPeerConnectionFactory()
-
-//        val mediaStream = peerConnectionFactory.createLocalMediaStream("local_media_stream")
         val createAudioSource = peerConnectionFactory.createAudioSource(createAudioConstraints())
         val audioTrack =
             peerConnectionFactory.createAudioTrack("local_audio_track", createAudioSource)
-//        mediaStream.addTrack(audioTrack)
 
         val videoCapture = createVideoCapture(this)
         var videoTrack: VideoTrack? = null
@@ -205,9 +211,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
             //使用720P的分辨率
             capture.startCapture(1280, 720, 30)
             videoTrack!!.addSink(mBinding.surfaceViewLocal)
-//            mediaStream.addTrack(videoTrack)
         }
-
 
         val rtcConfig = PeerConnection.RTCConfiguration(emptyList())
         // 这里不能用PLAN_B 会报错
@@ -215,25 +219,18 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
 
         val peerConnection = peerConnectionFactory.createPeerConnection(
             rtcConfig,
-            object : PeerConnectionObserver() {
-                override fun onAddStream(mediaStream: MediaStream?) {
-                    super.onAddStream(mediaStream)
-
-                }
-            })?.apply {
-//            addTransceiver(
-//                MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO,
-//                RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
-//            )
-//            addTransceiver(
-//                MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
-//                RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
-//            )
+            PeerConnectionObserver()
+        )?.apply {
             if (videoTrack != null) {
-                addTransceiver(videoTrack)
+                addTransceiver(
+                    videoTrack,
+                    RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
+                )
             }
-            addTransceiver(audioTrack)
-
+            addTransceiver(
+                audioTrack,
+                RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
+            )
         }
 
         peerConnection?.let { connection ->
@@ -242,14 +239,13 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                     super.onCreateSuccess(description)
                     description?.let {
                         if (it.type == SessionDescription.Type.OFFER) {
-                            offerSdp = it.description
+                            val offerSdp = it.description
                             connection.setLocalDescription(SdpAdapter("setLocalDescription"), it)
                             //"http://192.168.2.150:1985/rtc/v1/publish/"
 
-                            val webrtcUrl = "webrtc://192.168.2.88/live/android/camera2"
                             val srsBean = SrsRequestBean(
                                 it.description,
-                                webrtcUrl
+                                pullWebrtcUrl
                             )
 
                             val toJson = MoshiUtil.toJson(srsBean)
@@ -270,13 +266,13 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         XLog.i("pull网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
-                                            reorderSdp(bean.sdp)
+                                            reorderSdp(offerSdp, bean.sdp)
                                         )
                                         connection.setRemoteDescription(
                                             SdpAdapter("setRemoteDescription"),
                                             remoteSdp
                                         )
-                                        socketIoClient.pullWebRTC(webrtcUrl)
+                                        socketIoClient.pullWebRTC(pullWebrtcUrl)
                                     } else {
                                         XLog.w("pull网络请求失败，code：${bean.code}")
                                     }
@@ -287,6 +283,8 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                 }
             }, MediaConstraints())
         }
+
+        pullConnection = peerConnection
     }
 
     private fun createAudioConstraints(): MediaConstraints {
@@ -335,5 +333,8 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     override fun onDestroy() {
         super.onDestroy()
         socketIoClient.close()
+        pullConnection?.dispose()
+        pushConnection?.dispose()
+        peerConnectionFactory.dispose()
     }
 }
