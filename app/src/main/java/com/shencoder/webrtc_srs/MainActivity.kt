@@ -2,6 +2,7 @@ package com.shencoder.webrtc_srs
 
 import android.content.Context
 import android.os.Bundle
+import android.text.TextUtils
 import android.widget.Button
 import android.widget.EditText
 import androidx.lifecycle.lifecycleScope
@@ -9,10 +10,12 @@ import com.elvishew.xlog.XLog
 import com.shencoder.mvvmkit.base.view.BaseSupportActivity
 import com.shencoder.mvvmkit.base.viewmodel.DefaultViewModel
 import com.shencoder.mvvmkit.util.MoshiUtil
+import com.shencoder.mvvmkit.util.toastError
 import com.shencoder.mvvmkit.util.toastWarning
 import com.shencoder.webrtc_srs.constant.Constant
 import com.shencoder.webrtc_srs.databinding.ActivityMainBinding
 import com.shencoder.webrtc_srs.http.RetrofitClient
+import com.shencoder.webrtc_srs.http.bean.SrsRequestBean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,11 +34,11 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     /**
      * 推流地址
      */
-    private val pullWebrtcUrl =
+    private val pushWebrtcUrl =
         "webrtc://${Constant.SRS_SERVER_HTTPS}/live/android/camera"
 
-    private var pullConnection: PeerConnection? = null
     private var pushConnection: PeerConnection? = null
+    private var pullConnection: PeerConnection? = null
 
     override fun getLayoutId(): Int {
         return R.layout.activity_main
@@ -61,7 +64,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                 setRoomId(roomId)
                 joinRoom()
             }
-            initPullRtc()
+            initPushRtc()
         }
     }
 
@@ -72,7 +75,15 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
         )
         val options = PeerConnectionFactory.Options()
         val encoderFactory =
-            H264VideoEncoderFactory(H264HardwareVideoEncoderFactory(eglBaseContext, true, true))
+            createCustomVideoEncoderFactory(eglBaseContext,
+                enableIntelVp8Encoder = true,
+                enableH264HighProfile = true,
+                videoEncoderSupportedCallback = { info -> //判断编码器是否支持
+                    TextUtils.equals(
+                        "OMX.rk.video_encoder.avc",
+                        info.name
+                    )
+                })
         val decoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
 
         peerConnectionFactory = PeerConnectionFactory.builder()
@@ -89,15 +100,12 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
             if (it.isNullOrBlank()) {
                 return@setCallback
             }
-            runOnUiThread { initPushRTC(url = it) }
+            runOnUiThread { initPullRTC(url = it) }
         }
         socketIoClient.connect()
-//        Handler(Looper.getMainLooper()).postDelayed({
-//            initPushRTC()
-//        }, 5 * 1000L)
     }
 
-    private fun initPushRTC(url: String) {
+    private fun initPullRTC(url: String) {
         val rtcConfig = PeerConnection.RTCConfiguration(emptyList())
         // 这里不能用PLAN_B 会报错
         rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
@@ -137,7 +145,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                 url
                             )
                             val toJson = MoshiUtil.toJson(srsBean)
-                            println("push-json:${toJson}")
+                            println("pull-json:${toJson}")
                             //请求srs
                             lifecycleScope.launch {
                                 val result = try {
@@ -145,13 +153,14 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         retrofitClient.apiService.requestRemoteSrs(srsBean)
                                     }
                                 } catch (e: Exception) {
-                                    println("push网络请求出错：${e.printStackTrace()}")
+                                    println("pull网络请求出错：${e.printStackTrace()}")
+                                    toastError("pull网络请求出错：${e.printStackTrace()}")
                                     null
                                 }
 
                                 result?.let { bean ->
                                     if (bean.code == 0) {
-                                        XLog.i("psuh网络成功，code：${bean.code}")
+                                        XLog.i("pull网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
                                             reorderSdp(offerSdp, bean.sdp)
@@ -161,7 +170,8 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                             remoteSdp
                                         )
                                     } else {
-                                        XLog.w("push网络请求失败，code：${bean.code}")
+                                        XLog.w("pull网络请求失败，code：${bean.code}")
+                                        toastWarning("pull网络请求失败，code：${bean.code}")
                                     }
                                 }
                             }
@@ -171,7 +181,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
             }, MediaConstraints())
         }
 
-        pushConnection = peerConnection
+        pullConnection = peerConnection
     }
 
     private fun reorderSdp(offerSdp: String, sdp: String?): String {
@@ -194,7 +204,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     }
 
 
-    private fun initPullRtc() {
+    private fun initPushRtc() {
         val createAudioSource = peerConnectionFactory.createAudioSource(createAudioConstraints())
         val audioTrack =
             peerConnectionFactory.createAudioTrack("local_audio_track", createAudioSource)
@@ -245,11 +255,11 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
 
                             val srsBean = SrsRequestBean(
                                 it.description,
-                                pullWebrtcUrl
+                                pushWebrtcUrl
                             )
 
                             val toJson = MoshiUtil.toJson(srsBean)
-                            println("pull-json:${toJson}")
+                            println("push-json:${toJson}")
                             //请求srs
                             lifecycleScope.launch {
                                 val result = try {
@@ -257,13 +267,14 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         retrofitClient.apiService.pullToSrs(srsBean)
                                     }
                                 } catch (e: Exception) {
-                                    println("pull网络请求出错：${e.printStackTrace()}")
+                                    println("push网络请求出错：${e.printStackTrace()}")
+                                    toastError("push网络请求出错：${e.printStackTrace()}")
                                     null
                                 }
 
                                 result?.let { bean ->
                                     if (bean.code == 0) {
-                                        XLog.i("pull网络成功，code：${bean.code}")
+                                        XLog.i("push网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
                                             reorderSdp(offerSdp, bean.sdp)
@@ -272,9 +283,10 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                             SdpAdapter("setRemoteDescription"),
                                             remoteSdp
                                         )
-                                        socketIoClient.pullWebRTC(pullWebrtcUrl)
+                                        socketIoClient.pullWebRTC(pushWebrtcUrl)
                                     } else {
-                                        XLog.w("pull网络请求失败，code：${bean.code}")
+                                        XLog.w("push网络请求失败，code：${bean.code}")
+                                        toastWarning("push网络请求失败，code：${bean.code}")
                                     }
                                 }
                             }
@@ -284,7 +296,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
             }, MediaConstraints())
         }
 
-        pullConnection = peerConnection
+        pushConnection = peerConnection
     }
 
     private fun createAudioConstraints(): MediaConstraints {
@@ -333,8 +345,8 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     override fun onDestroy() {
         super.onDestroy()
         socketIoClient.close()
-        pullConnection?.dispose()
         pushConnection?.dispose()
+        pullConnection?.dispose()
         peerConnectionFactory.dispose()
     }
 }

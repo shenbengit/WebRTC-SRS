@@ -3,14 +3,25 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
+        <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTC-SRS/pull/src/main/res/layout/activity_main.xml" value="0.11727456940222898" />
+        <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTC-SRS/push/src/main/res/layout/activity_main.xml" value="0.11727456940222898" />
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/app/src/main/res/layout/activity_main.xml" value="0.11727456940222898" />
       </map>
     </option>
+  </component>
+  <component name="FindBugsConfigurable">
+    <option name="make" value="true" />
+    <option name="effort" value="default" />
+    <option name="priority" value="Medium" />
+    <option name="excludeFilter" value="" />
   </component>
   <component name="ProjectRootManager" version="2" languageLevel="JDK_11" default="true" project-jdk-name="11" project-jdk-type="JavaSDK">
     <output url="file://$PROJECT_DIR$/build/classes" />
   </component>
   <component name="ProjectType">
     <option name="id" value="Android" />
+  </component>
+  <component name="SuppressionsComponent">
+    <option name="suppComments" value="[]" />
   </component>
 </project>

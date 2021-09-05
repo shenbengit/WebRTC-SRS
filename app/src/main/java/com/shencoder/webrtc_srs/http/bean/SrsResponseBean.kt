@@ -1,4 +1,4 @@
-package com.shencoder.webrtc_srs
+package com.shencoder.webrtc_srs.http.bean
 
 
 import com.squareup.moshi.Json
@@ -13,5 +13,5 @@ data class SrsResponseBean(
     @Json(name = "server")
     val server: String?,
     @Json(name = "sessionid")
-    val sessionid: String?
+    val sessionId: String?
 )

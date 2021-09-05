@@ -1,7 +1,7 @@
 package com.shencoder.webrtc_srs.http
 
-import com.shencoder.webrtc_srs.SrsRequestBean
-import com.shencoder.webrtc_srs.SrsResponseBean
+import com.shencoder.webrtc_srs.http.bean.SrsRequestBean
+import com.shencoder.webrtc_srs.http.bean.SrsResponseBean
 import retrofit2.http.Body
 import retrofit2.http.POST
 
