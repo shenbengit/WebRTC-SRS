@@ -8,6 +8,7 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "WebRTC-SRS"
-include ':app'
+include ':p2p'
 include ':push'
 include ':pull'
+include ':multichannel'
