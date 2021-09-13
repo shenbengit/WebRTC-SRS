@@ -2,14 +2,18 @@ package com.shencoder.webrtc_srs.pull.http.bean
 
 
 import com.squareup.moshi.Json
-import com.squareup.moshi.JsonClass
+import org.webrtc.PeerConnection
 
-@JsonClass(generateAdapter = true)
 data class SrsResponseBean(
+    /**
+     * 0：成功
+     */
     @Json(name = "code")
     val code: Int,
-    @Json(name = "sdp")
-    val sdp: String?,
+    /**
+     * 用于设置[PeerConnection.setRemoteDescription]
+     */
+    @Json(name = "sdp") val sdp: String?,
     @Json(name = "server")
     val server: String?,
     @Json(name = "sessionid")

@@ -10,7 +10,7 @@ object Constant {
     /**
      * SRS服务器IP
      */
-    const val SRS_SERVER_IP = "192.168.31.128"
+    const val SRS_SERVER_IP = "192.168.2.91"
 
     /**
      * SRS服务http请求端口，默认1985

@@ -8,6 +8,7 @@ import com.shencoder.mvvmkit.base.viewmodel.DefaultViewModel
 import com.shencoder.mvvmkit.util.MoshiUtil
 import com.shencoder.mvvmkit.util.toastError
 import com.shencoder.mvvmkit.util.toastWarning
+import com.shencoder.webrtc_srs.pull.constant.Constant
 import com.shencoder.webrtc_srs.pull.databinding.ActivityMainBinding
 import com.shencoder.webrtc_srs.pull.http.RetrofitClient
 import com.shencoder.webrtc_srs.pull.http.bean.SrsRequestBean
@@ -24,6 +25,12 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     private val eglBaseContext = EglBase.create().eglBaseContext
     private lateinit var peerConnectionFactory: PeerConnectionFactory
     private var pullConnection: PeerConnection? = null
+
+    private companion object {
+        private const val URL =
+            "webrtc://${Constant.SRS_SERVER_IP}/live/livestream"
+    }
+
     override fun getLayoutId(): Int {
         return R.layout.activity_main
     }
@@ -37,6 +44,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     }
 
     override fun initView() {
+        mBinding.etUrl.setText(URL)
         mBinding.svr.init(eglBaseContext, null)
         mBinding.btnPull.setOnClickListener {
             val url = mBinding.etUrl.text.toString().trim()
@@ -50,10 +58,6 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
     }
 
     override fun initData(savedInstanceState: Bundle?) {
-        PeerConnectionFactory.initialize(
-            PeerConnectionFactory.InitializationOptions
-                .builder(applicationContext).createInitializationOptions()
-        )
         val options = PeerConnectionFactory.Options()
         val encoderFactory = DefaultVideoEncoderFactory(eglBaseContext, true, true)
         val decoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
@@ -66,7 +70,10 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
 
     private fun initPullRTC(url: String) {
         val rtcConfig = PeerConnection.RTCConfiguration(emptyList())
-        // 这里不能用PLAN_B 会报错
+        /*
+         <p>For users who wish to send multiple audio/video streams and need to stay interoperable with legacy WebRTC implementations, specify PLAN_B.
+         <p>For users who wish to send multiple audio/video streams and/or wish to use the new RtpTransceiver API, specify UNIFIED_PLAN.
+         */
         rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         val peerConnection = peerConnectionFactory.createPeerConnection(
             rtcConfig,

@@ -5,6 +5,7 @@ import com.shencoder.mvvmkit.ext.globalInit
 import com.shencoder.webrtc_srs.pull.di.appModule
 import org.koin.android.java.KoinAndroidApplication
 import org.koin.core.logger.Level
+import org.webrtc.PeerConnectionFactory
 
 /**
  *
@@ -16,6 +17,10 @@ class App : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        PeerConnectionFactory.initialize(
+            PeerConnectionFactory.InitializationOptions
+                .builder(applicationContext).createInitializationOptions()
+        )
         val koinApplication =
             KoinAndroidApplication
                 .create(
