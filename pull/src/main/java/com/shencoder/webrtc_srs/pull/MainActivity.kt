@@ -128,7 +128,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                                         XLog.i("pull网络成功，code：${bean.code}")
                                         val remoteSdp = SessionDescription(
                                             SessionDescription.Type.ANSWER,
-                                            reorderSdp(offerSdp, bean.sdp)
+                                            convertAnswerSdp(offerSdp, bean.sdp)
                                         )
                                         connection.setRemoteDescription(
                                             SdpAdapter("setRemoteDescription"),
@@ -148,28 +148,55 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
         pullConnection = peerConnection
     }
 
-
-    private fun reorderSdp(offerSdp: String, sdp: String?): String {
-        if (sdp.isNullOrBlank()) {
+    /**
+     * 转换AnswerSdp
+     * @param offerSdp offerSdp：创建offer时生成的sdp
+     * @param answerSdp answerSdp：网络请求srs服务器返回的sdp
+     * @return 转换后的AnswerSdp
+     */
+    private fun convertAnswerSdp(offerSdp: String, answerSdp: String?): String {
+        if (answerSdp.isNullOrBlank()) {
             return ""
         }
-        if (offerSdp.isEmpty()) {
-            return sdp
+        val indexOfOfferVideo = offerSdp.indexOf("m=video")
+        val indexOfOfferAudio = offerSdp.indexOf("m=audio")
+        if (indexOfOfferVideo == -1 || indexOfOfferAudio == -1) {
+            return answerSdp
         }
-        val offerFirstM = offerSdp.substring(offerSdp.indexOf("m="), offerSdp.lastIndexOf("m="))
-        val firstM = sdp.substring(sdp.indexOf("m="), sdp.lastIndexOf("m="))
-        if (offerFirstM.indexOf("m=video") == firstM.indexOf("m=video")) {
-            return sdp
+        val indexOfAnswerVideo = answerSdp.indexOf("m=video")
+        val indexOfAnswerAudio = answerSdp.indexOf("m=audio")
+        if (indexOfAnswerVideo == -1 || indexOfAnswerAudio == -1) {
+            return answerSdp
         }
-        val start = sdp.substring(0, sdp.indexOf("m="))
-        val lastM = sdp.substring(sdp.lastIndexOf("m="), sdp.length)
-        val str = start + lastM + firstM
-//        XLog.d("reOrderSdp $str")
-        return str
+
+        val isFirstOfferVideo = indexOfOfferVideo < indexOfOfferAudio
+        val isFirstAnswerVideo = indexOfAnswerVideo < indexOfAnswerAudio
+        return if (isFirstOfferVideo == isFirstAnswerVideo) {
+            //顺序一致
+            answerSdp
+        } else {
+            //需要调换顺序
+            buildString {
+                append(answerSdp.substring(0, indexOfAnswerVideo.coerceAtMost(indexOfAnswerAudio)))
+                append(
+                    answerSdp.substring(
+                        indexOfAnswerVideo.coerceAtLeast(indexOfOfferVideo),
+                        answerSdp.length
+                    )
+                )
+                append(
+                    answerSdp.substring(
+                        indexOfAnswerVideo.coerceAtMost(indexOfAnswerAudio),
+                        indexOfAnswerVideo.coerceAtLeast(indexOfOfferVideo)
+                    )
+                )
+            }
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        mBinding.svr.release()
         pullConnection?.dispose()
         peerConnectionFactory.dispose()
     }
