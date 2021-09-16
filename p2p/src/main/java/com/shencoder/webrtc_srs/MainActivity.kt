@@ -37,6 +37,10 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
         "webrtc://${Constant.SRS_SERVER_HTTPS}/live/android/camera"
 
     private var pushConnection: PeerConnection? = null
+    private var videoTrack: VideoTrack? = null
+    private var cameraVideoCapturer: CameraVideoCapturer? = null
+    private var surfaceTextureHelper: SurfaceTextureHelper? = null
+
     private var pullConnection: PeerConnection? = null
 
     override fun getLayoutId(): Int {
@@ -74,10 +78,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                 enableIntelVp8Encoder = true,
                 enableH264HighProfile = true,
                 videoEncoderSupportedCallback = { info -> //判断编码器是否支持
-                    TextUtils.equals(
-                        "OMX.rk.video_encoder.avc",
-                        info.name
-                    )
+                    true
                 })
         val decoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
 
@@ -145,7 +146,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                             lifecycleScope.launch {
                                 val result = try {
                                     withContext(Dispatchers.IO) {
-                                        retrofitClient.apiService.requestRemoteSrs(srsBean)
+                                        retrofitClient.apiService.play(srsBean)
                                     }
                                 } catch (e: Exception) {
                                     println("pull网络请求出错：${e.printStackTrace()}")
@@ -231,31 +232,31 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
         val audioTrack =
             peerConnectionFactory.createAudioTrack("local_audio_track", createAudioSource)
 
-        val videoCapture = createVideoCapture(this)
-        var videoTrack: VideoTrack? = null
-        videoCapture?.let { capture ->
+        cameraVideoCapturer = createVideoCapture(this)
+        cameraVideoCapturer?.let { capture ->
             val videoSource = peerConnectionFactory.createVideoSource(capture.isScreencast)
-            videoTrack =
-                peerConnectionFactory.createVideoTrack("local_video_track", videoSource)
-            val textureHelper =
+
+            surfaceTextureHelper =
                 SurfaceTextureHelper.create("surface_texture_thread", eglBaseContext)
-            capture.initialize(textureHelper, this, videoSource.capturerObserver)
+            capture.initialize(surfaceTextureHelper, this, videoSource.capturerObserver)
             //使用720P的分辨率
             capture.startCapture(1280, 720, 30)
-            videoTrack!!.addSink(mBinding.surfaceViewLocal)
+            videoTrack =
+                peerConnectionFactory.createVideoTrack("local_video_track", videoSource).apply {
+                    addSink(mBinding.surfaceViewLocal)
+                }
         }
 
         val rtcConfig = PeerConnection.RTCConfiguration(emptyList())
-        // 这里不能用PLAN_B 会报错
         rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
 
         val peerConnection = peerConnectionFactory.createPeerConnection(
             rtcConfig,
             PeerConnectionObserver()
         )?.apply {
-            if (videoTrack != null) {
+            videoTrack?.let {
                 addTransceiver(
-                    videoTrack,
+                    it,
                     RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_ONLY)
                 )
             }
@@ -273,7 +274,6 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                         if (it.type == SessionDescription.Type.OFFER) {
                             val offerSdp = it.description
                             connection.setLocalDescription(SdpAdapter("setLocalDescription"), it)
-                            //"http://192.168.2.150:1985/rtc/v1/publish/"
 
                             val srsBean = SrsRequestBean(
                                 it.description,
@@ -286,7 +286,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                             lifecycleScope.launch {
                                 val result = try {
                                     withContext(Dispatchers.IO) {
-                                        retrofitClient.apiService.pullToSrs(srsBean)
+                                        retrofitClient.apiService.publish(srsBean)
                                     }
                                 } catch (e: Exception) {
                                     println("push网络请求出错：${e.printStackTrace()}")
@@ -368,6 +368,9 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
         super.onDestroy()
         mBinding.surfaceViewLocal.release()
         mBinding.surfaceViewRemote.release()
+        cameraVideoCapturer?.dispose()
+        surfaceTextureHelper?.dispose()
+        videoTrack?.dispose()
         socketIoClient.close()
         pushConnection?.dispose()
         pullConnection?.dispose()

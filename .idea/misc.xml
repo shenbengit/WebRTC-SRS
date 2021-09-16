@@ -19,6 +19,8 @@
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/multichannel/src/main/res/layout/layout_multichannel_call.xml" value="0.24114583333333334" />
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/p2p/src/main/res/layout/activity_test.xml" value="0.24114583333333334" />
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/pull/src/main/res/layout/activity_main.xml" value="0.24114583333333334" />
+        <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/push/src/main/res/layout/activity_main.xml" value="0.24114583333333334" />
+        <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/push/src/main/res/xml/network_security_config.xml" value="0.21784420289855072" />
       </map>
     </option>
   </component>

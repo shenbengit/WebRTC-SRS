@@ -14,8 +14,8 @@ import retrofit2.http.POST
 interface ApiService {
 
     @POST("/rtc/v1/play/")
-    suspend fun requestRemoteSrs(@Body body: SrsRequestBean): SrsResponseBean
+    suspend fun play(@Body body: SrsRequestBean): SrsResponseBean
 
     @POST("/rtc/v1/publish/")
-    suspend fun pullToSrs(@Body body: SrsRequestBean): SrsResponseBean
+    suspend fun publish(@Body body: SrsRequestBean): SrsResponseBean
 }

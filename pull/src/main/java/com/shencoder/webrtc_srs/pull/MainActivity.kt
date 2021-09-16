@@ -115,7 +115,7 @@ class MainActivity : BaseSupportActivity<DefaultViewModel, ActivityMainBinding>(
                             lifecycleScope.launch {
                                 val result = try {
                                     withContext(Dispatchers.IO) {
-                                        retrofitClient.apiService.requestRemoteSrs(srsBean)
+                                        retrofitClient.apiService.play(srsBean)
                                     }
                                 } catch (e: Exception) {
                                     println("pull网络请求出错：${e.printStackTrace()}")

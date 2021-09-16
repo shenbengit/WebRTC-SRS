@@ -27,10 +27,10 @@ import javax.net.ssl.X509TrustManager
 class RetrofitClient : BaseRetrofitClient() {
 
     private companion object {
-        private const val BASE_URL =
-            "https://${Constant.SRS_SERVER_HTTPS}"
 //        private const val BASE_URL =
-//            "http://${Constant.SRS_SERVER_HTTP}"
+//            "https://${Constant.SRS_SERVER_HTTPS}"
+        private const val BASE_URL =
+            "http://${Constant.SRS_SERVER_HTTP}"
     }
 
     val apiService by lazy {
