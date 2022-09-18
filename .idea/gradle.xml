@@ -15,9 +15,9 @@
             <option value="$PROJECT_DIR$/p2p" />
             <option value="$PROJECT_DIR$/pull" />
             <option value="$PROJECT_DIR$/push" />
+            <option value="$PROJECT_DIR$/webrtc" />
           </set>
         </option>
-        <option name="resolveModulePerSourceSet" value="false" />
       </GradleProjectSettings>
     </option>
   </component>

@@ -3,6 +3,7 @@
   <component name="DesignSurface">
     <option name="filePathToZoomLevelMap">
       <map>
+        <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTC-SRS/multichannel/src/main/res/layout/activity_main.xml" value="0.11727456940222898" />
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTC-SRS/pull/src/main/res/layout/activity_main.xml" value="0.11727456940222898" />
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTC-SRS/push/src/main/res/layout/activity_main.xml" value="0.11727456940222898" />
         <entry key="..\:/Work/Android/AndroidStudioProjects/WebRTCSRS/app/src/main/res/drawable/av_audio_answer_selector.xml" value="0.25729166666666664" />
